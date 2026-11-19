@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // A manager is anyone signed in with email and password.
+    function isManager() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'password';
+    }
+    // Reps browse the hub as anonymous visitors.
+    function isVisitor() {
+      return request.auth != null;
+    }
+
+    // Reps tick off their own to-dos and claim unassigned stores.
+    match /tasks/{doc}  { allow read, write: if isVisitor(); }
+    match /claims/{doc} { allow read, write: if isVisitor(); }
+
+    // Everything else is read-only for reps, writable by managers.
+    match /{coll}/{doc} {
+      allow read:  if isVisitor();
+      allow write: if isManager();
+    }
+  }
+}
