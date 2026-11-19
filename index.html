@@ -380,6 +380,7 @@ input[type=number]{background:var(--surface);border:1px solid var(--line);border
       <input id="mgrEmail" type="email" autocomplete="username" placeholder="you@wvsquared.co.za" aria-label="Email">
       <input id="mgrPass" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password">
       <button class="btn primary" type="submit">Sign in</button>
+      <button type="button" class="linkish" id="mgrReset">Forgotten your password? Email me a reset link</button>
       <button type="button" class="linkish" id="mgrBack">Use an access code instead</button>
     </form>
   </div>
@@ -1532,6 +1533,16 @@ $('#rep').onchange=e=>{
   subStores();render()};
 $('#teamBtn').onclick=openTeam;
 $('#mgrToggle').onclick=()=>{$('#mgrForm').hidden=false;$('#mgrToggle').hidden=true;$('#lockForm').hidden=true;$('#lockErr').textContent='';$('#mgrEmail').focus()};
+$('#mgrReset').onclick=async()=>{
+  const em=$('#mgrEmail').value.trim();
+  if(!em){$('#lockErr').textContent='Type your email above first, then tap this again.';$('#mgrEmail').focus();return}
+  $('#mgrReset').disabled=true;
+  try{await firebase.auth().sendPasswordResetEmail(em);
+    $('#lockErr').style.color='var(--ok,#1a7f48)';
+    $('#lockErr').textContent='Sent. Check your inbox (and spam) for a link to set your password.';}
+  catch(err){$('#lockErr').style.color='';$('#lockErr').textContent='Could not send that. '+errMsg(err)}
+  $('#mgrReset').disabled=false;
+};
 $('#mgrBack').onclick=()=>{$('#mgrForm').hidden=true;$('#mgrToggle').hidden=false;$('#lockForm').hidden=false;$('#lockErr').textContent=''};
 $('#mgrForm').onsubmit=async e=>{
   e.preventDefault();
