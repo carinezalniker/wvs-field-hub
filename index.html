@@ -1210,6 +1210,21 @@ function bindView(){
   const ccq=$('#ccq');if(ccq){ccq.oninput=()=>{S.ccQ=ccq.value;clearTimeout(ccq._t);ccq._t=setTimeout(()=>{render(true);const n=$('#ccq');n.focus();n.setSelectionRange(n.value.length,n.value.length)},250)}}
   const cca=$('#ccAll');if(cca)cca.onclick=()=>{S.ccAll=true;render(true)};
 }
+/* Firestore has no arrays inside arrays, so inner arrays travel as {__a:[…]}. */
+function fsEnc(v){
+  if(Array.isArray(v))return v.map(x=>Array.isArray(x)?{__a:fsEnc(x)}:fsEnc(x));
+  if(v&&typeof v==='object'){const o={};for(const k in v)o[k]=fsEnc(v[k]);return o}
+  return v;
+}
+function DEC(v){
+  if(Array.isArray(v))return v.map(DEC);
+  if(v&&typeof v==='object'){
+    const ks=Object.keys(v);
+    if(ks.length===1&&ks[0]==='__a'&&Array.isArray(v.__a))return v.__a.map(DEC);
+    const o={};for(const k in v)o[k]=DEC(v[k]);return o;
+  }
+  return v;
+}
 function errMsg(e){
   const c=String((e&&e.code)||'');
   if(/permission-denied|invalid_argument/.test(c))return "The database rules are blocking this. A manager needs to publish the hub's rules in the Firebase console.";
@@ -1461,15 +1476,15 @@ $('#outBtn').onclick=async()=>{ls.set('fh.unlock','');S.lockRep=null;S.mgr=false
 
 function startMgrSubs(){
   if(S.mgrSubs||!S.db)return;S.mgrSubs=true;const db=S.db;
-  db.collection('storelists').onSnapshot(s=>{S.allStores=Object.fromEntries(s.docs.filter(d=>d.id!=='unassigned').map(d=>[d.id,d.data()]));render()},()=>{});
-  db.collection('orders').onSnapshot(s=>{S.allOrders=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
-  db.doc('salesteam/summary').onSnapshot(s=>{S.team=s.exists?s.data():null;render()},()=>{});
-  db.doc('marketing/budgets').onSnapshot(s=>{S.mkBud=s.exists?s.data():null;render()},()=>{});
-  db.doc('marketing/sheet').onSnapshot(s=>{S.mkSheet=s.exists?s.data():null;render()},()=>{});
-  db.collection('mkspend').onSnapshot(s=>{S.mkSpend=s.docs.map(d=>({id:d.id,...d.data()}));render()},()=>{});
-  db.collection('callcycles').onSnapshot(s=>{S.allCC=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
+  db.collection('storelists').onSnapshot(s=>{S.allStores=Object.fromEntries(s.docs.filter(d=>d.id!=='unassigned').map(d=>[d.id,DEC(d.data())]));render()},()=>{});
+  db.collection('orders').onSnapshot(s=>{S.allOrders=Object.fromEntries(s.docs.map(d=>[d.id,DEC(d.data())]));render()},()=>{});
+  db.doc('salesteam/summary').onSnapshot(s=>{S.team=s.exists?DEC(s.data()):null;render()},()=>{});
+  db.doc('marketing/budgets').onSnapshot(s=>{S.mkBud=s.exists?DEC(s.data()):null;render()},()=>{});
+  db.doc('marketing/sheet').onSnapshot(s=>{S.mkSheet=s.exists?DEC(s.data()):null;render()},()=>{});
+  db.collection('mkspend').onSnapshot(s=>{S.mkSpend=s.docs.map(d=>({id:d.id,...DEC(d.data())}));render()},()=>{});
+  db.collection('callcycles').onSnapshot(s=>{S.allCC=Object.fromEntries(s.docs.map(d=>[d.id,DEC(d.data())]));render()},()=>{});
   if(!S._allActSub){S._allActSub=true;
-    db.collection('activations').onSnapshot(s=>{S.allAct=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});}
+    db.collection('activations').onSnapshot(s=>{S.allAct=Object.fromEntries(s.docs.map(d=>[d.id,DEC(d.data())]));render()},()=>{});}
 }
 function openRep(id,tab){
   if(!S.reps.some(r=>r.id===id))return;
@@ -1483,8 +1498,8 @@ function subStores(){
   if(unStores){unStores();unStores=null}
   if(unOrders){unOrders();unOrders=null}
   S.stores=null;S.orders=null;S._subRep=S.rep;if(!S.db||!S.rep)return;
-  unStores=S.db.doc('storelists/'+S.rep).onSnapshot(s=>{S.stores=s.exists?s.data():null;render()},()=>{});
-  unOrders=S.db.doc('orders/'+S.rep).onSnapshot(s=>{S.orders=s.exists?s.data():{orders:[]};render()},()=>{});
+  unStores=S.db.doc('storelists/'+S.rep).onSnapshot(s=>{S.stores=s.exists?DEC(s.data()):null;render()},()=>{});
+  unOrders=S.db.doc('orders/'+S.rep).onSnapshot(s=>{S.orders=s.exists?DEC(s.data()):{orders:[]};render()},()=>{});
   subSales();
   subAct();
   subCC();
@@ -1494,7 +1509,7 @@ function subCC(){
   if(unCC){unCC();unCC=null}
   S.cc=null;S.ccLoaded=false;S.ccWeek=null;S.ccQ='';S.ccAll=false;
   if(!S.db||!S.rep)return;
-  unCC=S.db.doc('callcycles/'+S.rep).onSnapshot(s=>{S.cc=s.exists?s.data():null;S.ccLoaded=true;render()},()=>{S.ccLoaded=true;render()});
+  unCC=S.db.doc('callcycles/'+S.rep).onSnapshot(s=>{S.cc=s.exists?DEC(s.data()):null;S.ccLoaded=true;render()},()=>{S.ccLoaded=true;render()});
 }
 let unAct=null;
 function subAct(){
@@ -1502,13 +1517,13 @@ function subAct(){
   if(S.actReg===rg&&unAct)return;
   if(unAct){unAct();unAct=null}
   S.act=null;S.actLoaded=false;S.actReg=rg;if(!S.db||!rg)return;
-  unAct=S.db.doc('activations/'+rg).onSnapshot(s=>{S.act=s.exists?s.data():null;S.actLoaded=true;render()},()=>{S.actLoaded=true;render()});
+  unAct=S.db.doc('activations/'+rg).onSnapshot(s=>{S.act=s.exists?DEC(s.data()):null;S.actLoaded=true;render()},()=>{S.actLoaded=true;render()});
 }
 let unSales=null;
 function subSales(){
   if(unSales){unSales();unSales=null}
   S.sales=null;S.salesLoaded=false;if(!S.db||!S.rep)return;
-  unSales=S.db.doc('sales/'+S.rep).onSnapshot(s=>{S.sales=s.exists?s.data():null;S.salesLoaded=true;render()},()=>{S.salesLoaded=true;render()});
+  unSales=S.db.doc('sales/'+S.rep).onSnapshot(s=>{S.sales=s.exists?DEC(s.data()):null;S.salesLoaded=true;render()},()=>{S.salesLoaded=true;render()});
 }
 $('#rep').onchange=e=>{
   if(e.target.value===ALL){setAllMode(true);return}
@@ -1561,7 +1576,7 @@ async function runImport(){
     let done=0;
     for(let i=0;i<jobs.length;i+=100){
       const batch=S.db.batch();
-      for(const [coll,id,data] of jobs.slice(i,i+100)) batch.set(S.db.collection(coll).doc(id),data);
+      for(const [coll,id,data] of jobs.slice(i,i+100)) batch.set(S.db.collection(coll).doc(id),fsEnc(data));
       await batch.commit(); done+=Math.min(100,jobs.length-i);
       S.impMsg=`Written ${done} of ${jobs.length} documents…`; render();
     }
@@ -1573,17 +1588,17 @@ async function runImport(){
 /* ---------- data ---------- */
 function startSubs(){
   if(S._subs)return; S._subs=true; const db=S.db;
-  const docs=s=>s.docs.map(d=>({id:d.id,...d.data()}));
+  const docs=s=>s.docs.map(d=>({id:d.id,...DEC(d.data())}));
   db.collection('reps').onSnapshot(s=>{S.reps=docs(s).sort((a,b)=>(a.order||99)-(b.order||99)||a.name.localeCompare(b.name));S.loaded.reps=true;fillReps();applyLock();if(S.rep)subAct();render()},()=>{});
-  db.doc('settings/access').onSnapshot(s=>{S.mgrCode=String((s.exists&&s.data().managerCode)||'').trim();if(S.loaded.reps){applyLock();render()}},()=>{});
+  db.doc('settings/access').onSnapshot(s=>{S.mgrCode=String((s.exists&&DEC(s.data()).managerCode)||'').trim();if(S.loaded.reps){applyLock();render()}},()=>{});
   if(S.admin)startMgrSubs();
   db.collection('files').onSnapshot(s=>{S.files=docs(s);render()},()=>{});
   db.collection('promos').onSnapshot(s=>{S.promos=docs(s).filter(p=>!p.hidden);render()},()=>{});
   db.collection('priorities').onSnapshot(s=>{S.priorities=docs(s);render()},()=>{});
   db.collection('tasks').onSnapshot(s=>{S.tasks=docs(s);render()},()=>{});
-  db.doc('storelists/unassigned').onSnapshot(s=>{S.pool=s.exists?s.data():null;render()},()=>{});
-  db.collection('claims').onSnapshot(s=>{S.claims=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
-  db.collection('brands').onSnapshot(s=>{S.brandInfo=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
+  db.doc('storelists/unassigned').onSnapshot(s=>{S.pool=s.exists?DEC(s.data()):null;render()},()=>{});
+  db.collection('claims').onSnapshot(s=>{S.claims=Object.fromEntries(s.docs.map(d=>[d.id,DEC(d.data())]));render()},()=>{});
+  db.collection('brands').onSnapshot(s=>{S.brandInfo=Object.fromEntries(s.docs.map(d=>[d.id,DEC(d.data())]));render()},()=>{});
   render();
 }
 (async()=>{
