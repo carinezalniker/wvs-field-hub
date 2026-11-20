@@ -439,9 +439,32 @@ const repName=id=>id==='all'?'All reps':(S.reps.find(r=>r.id===id)?.name||'Unkno
 const forRep=x=>S.allMode||x.rep==='all'||x.rep===S.rep;
 const canAll=()=>S.admin||S.mgr;
 /* all-reps data sources — used whenever the rep picker is on "All reps" */
+/* Repsly often holds one place record per brand, so the same shop appears
+   two or three times. It is one store to the rep: merge on name + town. */
+function storeKey(s){
+  return (String(s.n||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()
+    +'|'+String(s.t||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim());
+}
+function mergeStores(list){
+  const m=new Map();
+  for(const s of list){
+    const k=storeKey(s), cur=m.get(k);
+    if(!cur){m.set(k,{...s,b:[...(s.b||[])],_codes:[s.c].filter(Boolean)});continue}
+    for(const x of (s.b||[])) if(!cur.b.includes(x)) cur.b.push(x);
+    if(s.c&&!cur._codes.includes(s.c)) cur._codes.push(s.c);
+    if(s.lv&&(!cur.lv||s.lv>cur.lv)) cur.lv=s.lv;
+    if(s.lo&&(!cur.lo||s.lo>cur.lo)) cur.lo=s.lo;
+    if(!s.x) cur.x=0;                       // active anywhere means active
+    if(!cur.t&&s.t) cur.t=s.t;
+    if(!cur.p&&s.p) cur.p=s.p;
+    if(!cur.lo&&s.lo) cur.lo=s.lo;
+    if((cur.r==='Independent'||!cur.r)&&s.r&&s.r!=='Independent') cur.r=s.r;
+  }
+  return [...m.values()];
+}
 function curStores(){
-  if(S.allMode)return S.reps.flatMap(r=>repStoresOf(r.id).map(s=>({...s,_rep:r.name})));
-  return S.stores?.stores||[];
+  if(S.allMode)return S.reps.flatMap(r=>mergeStores(repStoresOf(r.id)).map(s=>({...s,_rep:r.name})));
+  return mergeStores(S.stores?.stores||[]);
 }
 function curOrders(){
   if(S.allMode)return S.reps.flatMap(r=>repOrdersOf(r.id).map(o=>({...o,_rep:r.name})));
