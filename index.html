@@ -491,9 +491,31 @@ function render(force){
   bindView();
 }
 
+/* Repsly lumps every forecourt and small account under "Independent".
+   Split that bucket by the banner in the store name so the reps can work it. */
+const RET_GROUPS=[
+  ['FreshStop',       /fresh\s*(stop|top)/i],
+  ['Astron / Caltex', /astron|caltex/i],
+  ['TotalEnergies',   /total\s*en|totaleng|^total\b/i],
+  ['Engen',           /engen/i],
+  ['Sasol',           /sasol/i],
+  ['BP',              /\bbp\b/i],
+  ['Puma',            /\bpuma\b/i],
+  ['Viva',            /\bviva\b/i],
+  ['Build It',        /build\s*it/i],
+  ['SaveMor',         /save\s*mor/i],
+];
+function retOf(s){
+  const r=(s&&s.r)||'Unassigned';
+  if(r!=='Independent')return r;
+  const n=String(s.n||'');
+  for(const [g,rx] of RET_GROUPS) if(rx.test(n))return g;
+  return 'Other independents';
+}
+
 function storeStats(){
   const st=curStores();
-  const rets=new Set(st.map(s=>s.r||'Unassigned'));
+  const rets=new Set(st.map(retOf));
   return {n:st.length,r:rets.size,st};
 }
 
@@ -611,14 +633,14 @@ function viewStores(){
   const head=`<div class="ph"><h2>Retailers</h2><span class="meta">${S.allMode?'Every rep':S.stores?.updatedAt?`List updated ${fmtD(S.stores.updatedAt.slice(0,10))}`:''}</span>${S.admin?'<button class="btn small" id="importBtn">Import store list</button>':''}</div>`;
   if(!st.length) return `<section class="panel">${head}<div class="pb"><div class="empty">${S.allMode?'No store lists loaded yet.':'No store list loaded for this rep yet.'}${S.admin?' Use <b>Import store list</b> to load a CSV export from Repsly or Excel.':' Your manager loads this from Repsly.'}</div></div></section>`+poolPanel();
   const g={};
-  st.forEach(s=>{const r=s.r||'Unassigned';(g[r]=g[r]||{n:0,b:{}}).n++;(s.b||[]).forEach(k=>g[r].b[k]=(g[r].b[k]||0)+1)});
+  st.forEach(s=>{const r=retOf(s);(g[r]=g[r]||{n:0,b:{}}).n++;(s.b||[]).forEach(k=>g[r].b[k]=(g[r].b[k]||0)+1)});
   const rows=Object.entries(g).sort((a,b)=>b[1].n-a[1].n);
   const retTable=`<div class="tbl"><table><thead><tr><th>Retailer</th><th class="n">Stores</th>${BRANDS.map(b=>`<th class="bk"><span class="sw" style="background:var(--b-${b.k})"></span>${esc(b.s)}</th>`).join('')}<th>Promotions</th></tr></thead><tbody>
     ${rows.map(([r,v])=>{const pr=ap.filter(p=>(p.retailer||'').toLowerCase()===r.toLowerCase());return `<tr data-ret="${esc(r)}" class="${S.storeRet===r?'on':''}" title="Show ${esc(r)} stores in the list below"><td><b>${esc(r)}</b></td><td class="n">${v.n}</td>${BRANDS.map(b=>`<td class="bk ${v.b[b.k]?'':'zero'}">${v.b[b.k]||'–'}</td>`).join('')}<td>${pr.map(p=>`<span class="chip ${promoState(p).c}">${esc(BMAP[p.brand]?.s||'')} ${fmtD(p.start)}</span>`).join(' ')||'<span style="color:var(--muted)">None</span>'}</td></tr>`}).join('')}
     <tr><td><b>Total</b></td><td class="n"><b>${st.length}</b></td>${BRANDS.map(b=>{const c=st.filter(s=>(s.b||[]).includes(b.k)).length;return `<td class="bk"><b>${c||'–'}</b></td>`}).join('')}<td></td></tr>
   </tbody></table></div>`;
   const q=S.storeQ.toLowerCase();
-  let fl=st.filter(s=>(!q||(s.n+' '+(s.t||'')+' '+(s.r||'')).toLowerCase().includes(q))&&(!S.storeRet||(s.r||'Unassigned')===S.storeRet));
+  let fl=st.filter(s=>(!q||(s.n+' '+(s.t||'')+' '+(s.r||'')+' '+retOf(s)).toLowerCase().includes(q))&&(!S.storeRet||retOf(s)===S.storeRet));
   if(S.storeBrand){const [mode,k]=S.storeBrand.split(':');if(mode==='stale'){const cut=addDays(TODAY,-Number(k));fl=fl.filter(s=>!s.lv||s.lv<cut)}else if(mode==='noorder'){const cut=addDays(TODAY,-Number(k));fl=fl.filter(s=>!s.lo||s.lo<cut)}else fl=fl.filter(s=>((s.b||[]).includes(k))===(mode==='has'))}
   const shown=fl.slice(0,1500);
   const storeTable=`<div class="filters">
@@ -627,7 +649,7 @@ function viewStores(){
       <select id="sbrand" aria-label="Store filter"><option value="">All stores</option><option value="stale:30" ${S.storeBrand==='stale:30'?'selected':''}>Not visited in 30 days</option><option value="noorder:60" ${S.storeBrand==='noorder:60'?'selected':''}>No order in 60 days</option>${BRANDS.map(b=>`<option value="has:${b.k}" ${S.storeBrand==='has:'+b.k?'selected':''}>Stocks ${esc(b.s)}</option><option value="not:${b.k}" ${S.storeBrand==='not:'+b.k?'selected':''}>Missing ${esc(b.s)}</option>`).join('')}</select>
     </div>
     <div class="tbl"><table><thead><tr><th>Store</th>${S.allMode?'<th>Rep</th>':''}<th>Retailer</th><th>Town</th><th>Brands stocked</th><th>Last order</th><th>Last visit</th></tr></thead><tbody>
-    ${shown.map(s=>`<tr><td>${esc(s.n)}${s.x?' <span class="chip" title="Marked inactive in Repsly but visited or ordered recently">Inactive in Repsly</span>':''}</td>${S.allMode?`<td>${esc(s._rep||'')}</td>`:''}<td>${esc(s.r||'')}</td><td>${esc(s.t||'')}</td><td><div class="bdots">${(s.b||[]).map(k=>BMAP[k]?`<span style="--bc:var(--b-${k})">${esc(BMAP[k].s)}</span>`:'').join('')||'<span style="--bc:var(--muted)">None</span>'}</div></td><td class="num" style="white-space:nowrap">${s.lo?fmtD(s.lo):'<span style="color:var(--muted)">–</span>'}</td><td class="num" style="white-space:nowrap">${s.lv?`<span class="${s.lv<addDays(TODAY,-30)?'chip over':''}">${fmtD(s.lv)}</span>`:'<span class="chip over">Never</span>'}</td></tr>`).join('')}
+    ${shown.map(s=>`<tr><td>${esc(s.n)}${s.x?' <span class="chip" title="Marked inactive in Repsly but visited or ordered recently">Inactive in Repsly</span>':''}</td>${S.allMode?`<td>${esc(s._rep||'')}</td>`:''}<td>${esc(retOf(s))}</td><td>${esc(s.t||'')}</td><td><div class="bdots">${(s.b||[]).map(k=>BMAP[k]?`<span style="--bc:var(--b-${k})">${esc(BMAP[k].s)}</span>`:'').join('')||'<span style="--bc:var(--muted)">None</span>'}</div></td><td class="num" style="white-space:nowrap">${s.lo?fmtD(s.lo):'<span style="color:var(--muted)">–</span>'}</td><td class="num" style="white-space:nowrap">${s.lv?`<span class="${s.lv<addDays(TODAY,-30)?'chip over':''}">${fmtD(s.lv)}</span>`:'<span class="chip over">Never</span>'}</td></tr>`).join('')}
     </tbody></table></div><div class="more">Showing ${shown.length} of ${fl.length} stores${fl.length!==st.length?` (filtered from ${st.length})`:''}</div>`;
   return `<section class="panel">${head}<div class="pb">${retTable}</div></section>
     <section class="panel" id="storeListPanel"><div class="ph"><h2>Store list</h2><span class="meta num">${st.length} stores</span></div><div class="pb">${storeTable}</div></section>`+poolPanel();
@@ -1269,7 +1291,7 @@ function addPriority(){
   async v=>{if(!v('text'))throw'Write the priority first.';await S.db.collection('priorities').add({text:v('text'),rep:v('rep'),brand:v('brand'),level:v('level'),due:'',createdAt:new Date().toISOString()});toast('Priority added')});
 }
 function addPromo(){
-  const rets=[...new Set((S.stores?.stores||[]).map(s=>s.r).filter(Boolean))];
+  const rets=[...new Set((S.stores?.stores||[]).map(retOf).filter(Boolean))];
   openForm('Add promotion',[
     {html:`<datalist id="retList">${['Pick n Pay','Spar','Checkers','Shoprite','Makro','Norman Goodfellows','Independent',...rets].filter((x,i,a)=>a.indexOf(x)===i).map(r=>`<option value="${esc(r)}">`).join('')}</datalist>`},
     {id:'retailer',label:'Retailer',required:true,list:'retList',ph:'e.g. Spar'},
