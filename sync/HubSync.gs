@@ -7,9 +7,10 @@
  * It signs in as whoever owns the script (you), so there is no key to store
  * and nothing to leak. Run syncToHub() once by hand, then set a daily trigger.
  *
- * Install: Extensions → Apps Script, paste this over Code.gs, then paste the
- * appsscript.json alongside it (see the other file). Run syncToHub and approve
- * the permission prompt the first time.
+ * Install: Extensions → Apps Script, then File → + → Script and name it
+ * HubSync. Paste this in there. Do NOT touch the existing Code.gs — that is
+ * the Repsly→Sheet sync and this one runs after it, off the same tabs.
+ * Then add the datastore scope to appsscript.json (see the notes in chat).
  */
 
 var PROJECT_ID = 'wvs-field-hub';
@@ -236,10 +237,15 @@ function writeDoc_(token, path, data) {
 function noteSync_(ss, written, detail) {
   var sh = ss.getSheetByName('Sync Log');
   if (!sh) return;
-  sh.appendRow([new Date(), 'Hub sync', written + ' documents', detail.slice(0, 400)]);
+  // same six columns the Repsly sync logs
+  sh.appendRow([new Date(), '', '', '', 'HUB OK', written + ' docs — ' + detail.slice(0, 350)]);
 }
 
-/** Run once to have it sync itself every morning at 6am. */
+/**
+ * Optional: run once to sync to the hub every morning at 6am.
+ * Not needed if you add syncToHub() to the end of syncAll(), which keeps the
+ * hub in step with every hourly Repsly pull instead.
+ */
 function createDailyTrigger() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'syncToHub') ScriptApp.deleteTrigger(t);
