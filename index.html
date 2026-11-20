@@ -510,7 +510,7 @@ function retOf(s){
   if(r!=='Independent')return r;
   const n=String(s.n||'');
   for(const [g,rx] of RET_GROUPS) if(rx.test(n))return g;
-  return 'Other independents';
+  return 'Independent';
 }
 
 function storeStats(){
