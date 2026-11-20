@@ -195,7 +195,7 @@ th .sw{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:
 .lockbox input{width:100%;font-size:20px;letter-spacing:.28em;text-align:center;font-family:var(--f-mono);padding:12px}
 .lockbox .btn{width:100%;margin-top:10px;padding:10px}
 .lockerr{color:var(--crit);font-size:14px;margin-top:10px;min-height:20px}
-.lockalt{border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
+  .lockalt{border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
 .lockalt input{font-size:15px;letter-spacing:normal;text-align:left;font-family:var(--f-sans);margin-bottom:8px}
 .linkish{background:none;border:0;padding:0;color:var(--muted);font:inherit;font-size:13px;text-decoration:underline;cursor:pointer}
 .linkish:hover{color:var(--ink)}
@@ -462,9 +462,12 @@ function mergeStores(list){
   }
   return [...m.values()];
 }
+/* Repsly keeps closed and delisted stores on the books. The hub shows only
+   the live ones, so counts reflect the route the rep actually works. */
+function liveOnly(list){ return list.filter(s=>!s.x) }
 function curStores(){
-  if(S.allMode)return S.reps.flatMap(r=>mergeStores(repStoresOf(r.id)).map(s=>({...s,_rep:r.name})));
-  return mergeStores(S.stores?.stores||[]);
+  if(S.allMode)return S.reps.flatMap(r=>liveOnly(mergeStores(repStoresOf(r.id))).map(s=>({...s,_rep:r.name})));
+  return liveOnly(mergeStores(S.stores?.stores||[]));
 }
 function curOrders(){
   if(S.allMode)return S.reps.flatMap(r=>repOrdersOf(r.id).map(o=>({...o,_rep:r.name})));
@@ -672,7 +675,7 @@ function viewStores(){
       <select id="sbrand" aria-label="Store filter"><option value="">All stores</option><option value="stale:30" ${S.storeBrand==='stale:30'?'selected':''}>Not visited in 30 days</option><option value="noorder:60" ${S.storeBrand==='noorder:60'?'selected':''}>No order in 60 days</option>${BRANDS.map(b=>`<option value="has:${b.k}" ${S.storeBrand==='has:'+b.k?'selected':''}>Stocks ${esc(b.s)}</option><option value="not:${b.k}" ${S.storeBrand==='not:'+b.k?'selected':''}>Missing ${esc(b.s)}</option>`).join('')}</select>
     </div>
     <div class="tbl"><table><thead><tr><th>Store</th>${S.allMode?'<th>Rep</th>':''}<th>Retailer</th><th>Town</th><th>Brands stocked</th><th>Last order</th><th>Last visit</th></tr></thead><tbody>
-    ${shown.map(s=>`<tr><td>${esc(s.n)}${s.x?' <span class="chip" title="Marked inactive in Repsly but visited or ordered recently">Inactive in Repsly</span>':''}</td>${S.allMode?`<td>${esc(s._rep||'')}</td>`:''}<td>${esc(retOf(s))}</td><td>${esc(s.t||'')}</td><td><div class="bdots">${(s.b||[]).map(k=>BMAP[k]?`<span style="--bc:var(--b-${k})">${esc(BMAP[k].s)}</span>`:'').join('')||'<span style="--bc:var(--muted)">None</span>'}</div></td><td class="num" style="white-space:nowrap">${s.lo?fmtD(s.lo):'<span style="color:var(--muted)">–</span>'}</td><td class="num" style="white-space:nowrap">${s.lv?`<span class="${s.lv<addDays(TODAY,-30)?'chip over':''}">${fmtD(s.lv)}</span>`:'<span class="chip over">Never</span>'}</td></tr>`).join('')}
+    ${shown.map(s=>`<tr><td>${esc(s.n)}</td>${S.allMode?`<td>${esc(s._rep||'')}</td>`:''}<td>${esc(retOf(s))}</td><td>${esc(s.t||'')}</td><td><div class="bdots">${(s.b||[]).map(k=>BMAP[k]?`<span style="--bc:var(--b-${k})">${esc(BMAP[k].s)}</span>`:'').join('')||'<span style="--bc:var(--muted)">None</span>'}</div></td><td class="num" style="white-space:nowrap">${s.lo?fmtD(s.lo):'<span style="color:var(--muted)">–</span>'}</td><td class="num" style="white-space:nowrap">${s.lv?`<span class="${s.lv<addDays(TODAY,-30)?'chip over':''}">${fmtD(s.lv)}</span>`:'<span class="chip over">Never</span>'}</td></tr>`).join('')}
     </tbody></table></div><div class="more">Showing ${shown.length} of ${fl.length} stores${fl.length!==st.length?` (filtered from ${st.length})`:''}</div>`;
   return `<section class="panel">${head}<div class="pb">${retTable}</div></section>
     <section class="panel" id="storeListPanel"><div class="ph"><h2>Store list</h2><span class="meta num">${st.length} stores</span></div><div class="pb">${storeTable}</div></section>`+poolPanel();
